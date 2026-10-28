@@ -1,0 +1,7 @@
+{
+  "config": {
+    "format": "%Y-%m-%d %H:%M",
+    "template": "当前真实时间为：{time}"
+  },
+  "state": {}
+}

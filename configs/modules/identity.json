@@ -1,0 +1,8 @@
+{
+  "config": {
+    "people_path": "configs/identity.json",
+    "inject_profile": true,
+    "max_chars": 300
+  },
+  "state": {}
+}

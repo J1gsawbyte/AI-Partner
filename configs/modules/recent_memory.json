@@ -1,0 +1,11 @@
+{
+  "config": {
+    "group": "",
+    "history_rounds": 20,
+    "max_chars": 1200,
+    "max_line_chars": 200,
+    "record": true,
+    "privacy_block_patterns": []
+  },
+  "state": {}
+}

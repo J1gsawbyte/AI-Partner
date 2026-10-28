@@ -1,0 +1,10 @@
+{
+  "people": [
+    {
+      "name": "示例用户",
+      "qq": "100000000",
+      "enable": true,
+      "profile": {}
+    }
+  ]
+}

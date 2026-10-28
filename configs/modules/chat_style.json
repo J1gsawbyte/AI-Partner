@@ -1,0 +1,9 @@
+{
+  "config": {
+    "enabled_phases": [
+      "chat",
+      "proactive"
+    ]
+  },
+  "state": {}
+}

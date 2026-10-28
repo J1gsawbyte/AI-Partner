@@ -1,0 +1,8 @@
+{
+  "config": {
+    "max_chars": 25,
+    "max_sentences": 3,
+    "terminators": "。！？!?；;…"
+  },
+  "state": {}
+}

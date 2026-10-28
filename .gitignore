@@ -1,0 +1,71 @@
+# ---------- 密钥 / 私有配置 ----------
+# 真实配置含 API Key 与真实人名、QQ 号，只提交 *.example.json 模板
+configs/config.json
+configs/identity.json
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------- 运行期数据 ----------
+data/
+logs/
+*.log
+
+# ---------- 人设 / 提示词（本地私有，只保留目录） ----------
+prompts/*
+!prompts/.gitkeep
+
+# ---------- 大体积外部资源（模型 / 第三方运行时 / 压缩包） ----------
+# 只提交目录占位，内容自行放置
+embedding/*
+!embedding/.gitkeep
+napcat/*
+!napcat/.gitkeep
+*.zip
+# NapCat 安装包需要随仓库分发
+!napcat/*.zip
+
+# ---------- 编辑器 / 工具 ----------
+.idea/
+.vscode/
+.codebuddy/
+.workbuddy/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 远端模板原有规则 ----------
+# Build and Release Folders
+bin-debug/
+bin-release/
+[Oo]bj/
+[Bb]in/
+
+# Other files and folders
+.settings/
+
+# Executables
+*.swf
+*.air
+*.ipa
+*.apk
+
+# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
+# should NOT be excluded as they contain compiler settings and other important
+# information for Eclipse / Flash Builder.

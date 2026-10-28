@@ -1,0 +1,13 @@
+{
+    "persona": true,
+    "identity": true,
+    "chat_style": true,
+    "wake": true,
+    "recent_memory": true,
+    "long_memory": true,
+    "proactive": false,
+    "reply_split": true,
+    "ai_typing_delay": true,
+    "qq_channel": true,
+    "current_time": true
+}

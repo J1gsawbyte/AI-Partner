@@ -1,0 +1,53 @@
+{
+  "config": {
+    "group": "",
+    "default_user": "默认用户",
+    "summarize_rounds": 10,
+    "summarize_interval_minutes": 30,
+    "max_increment_messages": 200,
+    "prompt_path": "prompts/memory_extract.md",
+    "inject_top_k": 3,
+    "inject_max_chars": 600,
+    "min_score": 0.8,
+    "enabled_phases": [
+      "chat"
+    ],
+    "recall_growth": 1.8,
+    "stability_base_hours": 24,
+    "stability_max_hours": 720,
+    "importance_factor": 3,
+    "forget_threshold": 0.25,
+    "immortal_importance": 0.9,
+    "immortal_floor": 0.4,
+    "summary_max_chars": 60,
+    "attribute_aliases": {},
+    "privacy_block_patterns": [],
+    "embedding_enabled": true,
+    "embedding_model_path": "embedding/bge-base-zh-v1.5.onnx",
+    "embedding_tokenizer_path": "embedding/bge-base-zh-v1.5.tokenizer.json",
+    "embedding_cache_name": "memory.vec.npz",
+    "embedding_min_cos": 0.55,
+    "embedding_min_margin": 0.21,
+    "embedding_max_query_chars": 256,
+    "embedding_max_memory_chars": 200
+  },
+  "state": {
+    "groups": {
+      "default": {
+        "cursor": 0,
+        "pending_rounds": 0,
+        "last_summarize_at": ""
+      },
+      "949207129": {
+        "cursor": 44,
+        "pending_rounds": 0,
+        "last_summarize_at": "2026-10-27 14:25:42"
+      },
+      "private-1027713979": {
+        "cursor": 18,
+        "pending_rounds": 0,
+        "last_summarize_at": "2026-10-27 22:06:10"
+      }
+    }
+  }
+}

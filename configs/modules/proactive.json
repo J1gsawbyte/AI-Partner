@@ -1,0 +1,67 @@
+{
+  "config": {
+    "group": "测试专用",
+    "speaker": "",
+    "quiet_hours": [
+      "23:40",
+      "07:20"
+    ],
+    "max_per_hour": 2,
+    "failure_backoff": [
+      300,
+      900,
+      1800
+    ],
+    "rules": [
+      {
+        "id": "morning",
+        "type": "schedule",
+        "enabled": true,
+        "priority": 50,
+        "window": [
+          "08:00",
+          "09:30"
+        ],
+        "cooldown": 86400,
+        "expires_in": 600,
+        "instruction": "早上主动发一句自然的话打开今天的话题，简短，别用模板化问候，也别提你是在定时发消息"
+      },
+      {
+        "id": "night",
+        "type": "schedule",
+        "enabled": true,
+        "priority": 40,
+        "window": [
+          "22:30",
+          "23:30"
+        ],
+        "cooldown": 86400,
+        "expires_in": 600,
+        "instruction": "主动道一句晚安，简短自然，不要煽情，不要提定时或系统"
+      }
+    ]
+  },
+  "state": {
+    "rules": {
+      "morning": {
+        "last_fired_at": "",
+        "next_retry_at": "",
+        "attempts": 0
+      },
+      "night": {
+        "last_fired_at": "2026-10-25 22:56:01",
+        "next_retry_at": "",
+        "attempts": 0
+      }
+    },
+    "pending": {},
+    "sent_log": [
+      "2026-10-25 22:56:01"
+    ],
+    "stats": {
+      "sent": 1,
+      "skipped": 0,
+      "errors": 0
+    }
+  }
+}
