@@ -130,6 +130,7 @@ src/ai/module/
 | --- | --- | --- | --- |
 | `<message_path>/<会话>/messages.md` | `recent_memory` | `recent_memory`、`long_memory` | 读不到 → 返回空片段，不报错 |
 | `<message_path>/<会话>/memory.md` | `long_memory` | `long_memory` | 读不到 → 视为没有任何长期记忆 |
+| `<message_path>/_global/memory.md` | `long_memory` | `long_memory` | `global_memory=true` 时所有会话共用这份 |
 | `configs/identity.json` | **人**（声明式名单，运行时只读） | `identity`、`qq_channel` | 读不到 → 发言人沿用群名片、没人能私聊、档案不注入 |
 
 `<会话>` 是群号（`949207129`）或私聊标识（`private-1027713979`）：**群聊与私聊各存一套**，
@@ -337,6 +338,8 @@ key 一律三段 `{用户名}.{属性}.{次级属性}`：用户名取消息行�
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
+| `global_memory` | `false` | 所有私聊/群聊**共用一份**记忆库：`<message_path>/_global/memory.md` |
+| `memory_whitelist` | `[]` | 允许**读且写**记忆的会话：群号 / `private-<QQ>`，也可只写 QQ；留空 = 不限制 |
 | `summarize_rounds` | 10 | 未总结轮数达到该值即总结 |
 | `summarize_interval_minutes` | 30 | 距上次总结超过该分钟数且有待总结消息即总结 |
 | `max_increment_messages` | 200 | 单次最多读入的增量消息行数 |
@@ -358,6 +361,14 @@ key 一律三段 `{用户名}.{属性}.{次级属性}`：用户名取消息行�
 | `embedding_min_cos` | 0.55 | 语义补召回的相似度门槛（只补最像的那一条，且必须过身份闸） |
 | `embedding_min_margin` | 0.21 | 最像的一条要比"全库平均相似度"高出这么多；0 关闭 |
 | `embedding_max_query_chars` / `embedding_max_memory_chars` | 256 / 200 | 送模型的文本截断长度 |
+
+- **全局记忆**：`global_memory=true` 时只改记忆库位置，消息库仍按会话隔离——谁说的话还在各自
+  `messages.md` 里，只有**提炼结果**进同一个 `_global/memory.md`。各会话的 `cursor` 仍按会话记，
+  所以不会互相"跳过"没总结的消息；
+- **聊天白名单**：`memory_whitelist` 同时约束 `build`（读）与 `tick`/`on_user`（写与计数）。
+  不在名单里的会话照常聊天，只是**记忆完全空白**（既不注入、也不提炼）；留空 = 所有会话都允许，
+  升级后行为不变。只写 QQ 也能命中 `private-<QQ>`；
+- 两者可以叠加：全局记忆 + 白名单 = 只有名单里的会话读写那份共享记忆。
 
 检索面 = **key 三段 + summary 字面 + 语义相似**：模型给第三段起的名字不稳定（同一事实会写成
 `美式咖啡` / `咖啡` / `早晨喝美式`），所以 summary 里的双字词也参与匹配（权重 0.6，需配合

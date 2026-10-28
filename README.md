@@ -36,6 +36,9 @@ pip install openai numpy
 - `enable: false` 相当于拉黑，消息不进上下文
 - `profile`: 目前还没想好干啥用 XD
 
+`configs/modules\long_memory.json` 长期记忆
+请
+
 ### 3. 写人设
 
 你的所有性格文件保存在prompts/xxxxx文件中, 切换性格文件请在configs/modules/persona.json中更改path以匹配你的性格文件

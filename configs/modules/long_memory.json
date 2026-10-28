@@ -1,5 +1,7 @@
 {
   "config": {
+    "global_memory": false,
+    "memory_whitelist": [],
     "group": "",
     "default_user": "默认用户",
     "summarize_rounds": 10,

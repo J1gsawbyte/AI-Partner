@@ -16,7 +16,9 @@
 
 数据契约
 --------
-文件：``<message_path>/<群>/memory.md``，一行一条 JSON（按 key 合并，全量原子重写）：
+文件：``<message_path>/<群>/memory.md``，一行一条 JSON（按 key 合并，全量原子重写）。
+开了 ``global_memory`` 时所有会话共用 ``<message_path>/_global/memory.md``；此时消息库
+仍按会话隔离（谁说的话存在各自的 ``messages.md`` 里），只有**提炼结果**进同一个文件。
 
 ```json
 {"key": "张天宇.喜好.咖啡", "summary": "喜欢手冲咖啡，不加糖", "importance": 0.6,
@@ -31,6 +33,8 @@
 ---------------------------------------------------------
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
+| `global_memory` | `false` | 所有私聊/群聊共用一份记忆库（``<message_path>/_global/memory.md``） |
+| `memory_whitelist` | `[]` | 允许**读且写**记忆的会话（群号 / ``private-<QQ>``，也可只写 QQ）；留空 = 不限制 |
 | `group` | `""` | 群标识；留空用 ``ctx.group``，都为空回退单群兜底 / ``default`` |
 | `default_user` | `默认用户` | 没有发言人时的实体名（建库与检索两侧同口径） |
 | `summarize_rounds` | 10 | 未总结轮数达到该值即总结 |
@@ -107,6 +111,10 @@ _SELF_LABEL: Final[str] = "我"
 _MAX_EXISTING_LINES: Final[int] = 60
 #: 提炼输入单行截断
 _MAX_LINE_CHARS: Final[int] = 200
+#: 全局记忆的目录名：``<message_path>/_global/memory.md``
+_GLOBAL_MEMORY_DIR: Final[str] = "_global"
+#: 私聊会话标识前缀（与 ``qq_channel`` 的约定一致；这里只用于"白名单只写 QQ"的兼容）
+_PRIVATE_PREFIX: Final[str] = "private-"
 
 
 # -- 配置与路径 ------------------------------------------------------------ #
@@ -129,6 +137,29 @@ def _float_param(ctx: Any, key: str, default: float) -> float:
         return float(_params(ctx).get(key, default))
     except (TypeError, ValueError):
         return default
+
+
+def _bool_param(ctx: Any, key: str, default: bool) -> bool:
+    value = _params(ctx).get(key)
+    return value if isinstance(value, bool) else default
+
+
+def _whitelist(ctx: Any) -> set[str]:
+    """允许读写记忆的会话集合（小写）；空集合表示不限制。"""
+    raw = _params(ctx).get("memory_whitelist")
+    if not isinstance(raw, (list, tuple)):
+        return set()
+    return {str(item).strip().casefold() for item in raw if str(item).strip()}
+
+
+def _allowed(ctx: Any, group: str) -> bool:
+    """白名单只管"记忆"的读与写，不影响聊天本身；留空则不限制。"""
+    allowed = _whitelist(ctx)
+    if not allowed:
+        return True
+    # 白名单里写群号、`private-<QQ>` 或裸 QQ 都认（私聊标识去掉前缀再比一次）
+    names = {group.casefold(), group.removeprefix(_PRIVATE_PREFIX).casefold()}
+    return bool(names & allowed)
 
 
 def _now(ctx: Any) -> datetime:
@@ -197,7 +228,9 @@ def _paths(ctx: Any) -> tuple[str, Path, Path] | None:
         return None
     base = Path(root)
     group = _group(ctx) or _discover_group(base) or "default"
-    return group, store.message_file(base, group), mem.memory_file(base, group)
+    # 全局记忆：消息库仍按会话隔离，只有记忆库落到同一个 `_global/memory.md`
+    mem_group = _GLOBAL_MEMORY_DIR if _bool_param(ctx, "global_memory", False) else group
+    return group, store.message_file(base, group), mem.memory_file(base, mem_group)
 
 
 def _group_state(ctx: Any, group: str) -> dict[str, Any]:
@@ -240,7 +273,12 @@ def on_start(ctx: Any) -> None:
             for record in items
             if str(record.get("status") or mem.STATUS_ACTIVE) == mem.STATUS_ACTIVE
         )
-        ctx.log_info(f"就绪: 群 {group} 记忆库 {mem_path}（可用 {active} / 共 {len(items)} 条）")
+        scope = "全局共享" if _bool_param(ctx, "global_memory", False) else f"群 {group}"
+        limited = _whitelist(ctx)
+        note = f"；白名单 {len(limited)} 个会话" if limited else ""
+        ctx.log_info(
+            f"就绪: {scope} 记忆库 {mem_path}（可用 {active} / 共 {len(items)} 条{note}）"
+        )
         _warm_vectors(ctx, mem_path, items)
     except Exception as exc:  # noqa: BLE001 - 启动自检失败不能挡住主流程
         ctx.log_error(f"启动自检失败, 原因: {type(exc).__name__}: {exc}")
@@ -250,7 +288,7 @@ def on_user(ctx: Any) -> None:
     """未总结轮数 +1；首次发言时记下时间锚点，让"时间条件"从这一刻起算。"""
     try:
         paths = _paths(ctx)
-        if paths is None:
+        if paths is None or not _allowed(ctx, paths[0]):
             return
         entry = _group_state(ctx, paths[0])
         entry["pending_rounds"] = _state_int(entry, "pending_rounds") + 1
@@ -281,7 +319,7 @@ def _build(ctx: Any) -> Any:
     if not text:
         return ""
     paths = _paths(ctx)
-    if paths is None:
+    if paths is None or not _allowed(ctx, paths[0]):
         return ""
 
     _, _, mem_path = paths
@@ -430,6 +468,8 @@ def _tick(ctx: Any) -> None:
     if paths is None:
         return
     group, msg_path, mem_path = paths
+    if not _allowed(ctx, group):
+        return  # 不在白名单的会话：不遗忘、不提炼、也不碰共享记忆库
     params = _params(ctx)
     now = _now(ctx)
 
