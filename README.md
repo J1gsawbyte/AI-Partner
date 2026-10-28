@@ -36,8 +36,8 @@ pip install openai numpy
 - `enable: false` 相当于拉黑，消息不进上下文
 - `profile`: 目前还没想好干啥用 XD
 
-`configs/modules\long_memory.json` 长期记忆
-请
+`configs/modules/long_memory.json` 长期记忆
+请在"memory_whitelist"添加写入记忆的白名单(QQ群号/QQ号)
 
 ### 3. 写人设
 
