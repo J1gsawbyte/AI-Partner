@@ -19,7 +19,8 @@ role 表达，模型不必再从"我："这种文字前缀去猜。
 
 数据契约
 --------
-文件：``<message_path>/<群>/messages.md``，一行一个 JSON：
+文件：``<data>/groups/<群号>/messages.md``（群聊）或 ``<data>/private/<QQ>/messages.md``
+（私聊）；``<data>`` 是程序配置 ``message_path``。一行一个 JSON：
 
 ```json
 {"time": "2026-10-26 14:45:41", "role": "user", "speaker": "张天宇", "content": "..."}
@@ -119,11 +120,11 @@ def _group(ctx: Any) -> str:
 
 
 def _discover_group(root: Path) -> str:
-    """未指定群时，若根目录下只有一个群有消息文件，就用它（单群部署的兜底）。"""
+    """未指定群时，若 ``<data>/groups`` 下只有一个群有消息文件，就用它（单群部署的兜底）。"""
     try:
         candidates = sorted(
             path.name
-            for path in root.iterdir()
+            for path in (root / store.GROUPS_DIRNAME).iterdir()
             if path.is_dir() and (path / "messages.md").is_file()
         )
     except OSError:
@@ -132,7 +133,7 @@ def _discover_group(root: Path) -> str:
 
 
 def _message_file(ctx: Any) -> Path | None:
-    """本群的消息库文件：``<message_path>/<群>/messages.md``。"""
+    """本会话的消息库文件：群聊 ``<data>/groups/<群号>/``、私聊 ``<data>/private/<QQ>/``。"""
     root = getattr(ctx, "message_path", None)
     if root is None:
         return None

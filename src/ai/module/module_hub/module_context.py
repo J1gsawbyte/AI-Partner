@@ -66,7 +66,8 @@ class ModuleContext:
         self.segments: list[str] = []
         #: 本次钩子的触发时间
         self.now: datetime = datetime.now()
-        #: 全局消息库路径（``configs/config.json`` 的 ``message_path``，由 hub 注入）
+        #: data 根目录（``configs/config.json`` 的 ``message_path``，由 hub 注入）；
+        #: 会话文件用 ``message_store.message_file(root, 会话)`` 拼，群聊 / 私聊自动分层
         self.message_path: Path | None = None
 
     # -- 模型与对话记录 ---------------------------------------------------- #

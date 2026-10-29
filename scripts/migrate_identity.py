@@ -45,7 +45,7 @@ for _dir in (_LIB_DIR, _ROOT / "src" / "logger"):
 import identity_store  # noqa: E402  # pyright: ignore[reportMissingImports]
 import memory_store  # noqa: E402  # pyright: ignore[reportMissingImports]
 
-#: 消息库默认根目录（与 ``configs/config.json`` 的 ``message_path`` 默认值一致）
+#: 群聊会话目录（每个群一个子目录）；私聊在 ``data/private`` 下，需要时用 --root 指过去
 DEFAULT_ROOT: Final[str] = "data/groups"
 
 #: 身份表默认位置

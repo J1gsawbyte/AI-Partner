@@ -18,6 +18,7 @@
     "stability_base_hours": 24,
     "stability_max_hours": 720,
     "importance_factor": 3,
+    "forget_enable": true,
     "forget_threshold": 0.25,
     "immortal_importance": 0.9,
     "immortal_floor": 0.4,

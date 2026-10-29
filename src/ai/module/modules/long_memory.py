@@ -16,8 +16,10 @@
 
 数据契约
 --------
-文件：``<message_path>/<群>/memory.md``，一行一条 JSON（按 key 合并，全量原子重写）。
-开了 ``global_memory`` 时所有会话共用 ``<message_path>/_global/memory.md``；此时消息库
+文件：``<data>/groups/<群号>/memory.md``（群聊）或 ``<data>/private/<QQ>/memory.md``
+（私聊），一行一条 JSON（按 key 合并，全量原子重写）。``<data>`` 是程序配置
+``message_path``，记忆库与 ``messages.md`` 同目录。
+开了 ``global_memory`` 时所有会话共用 ``<data>/_global/memory.md``；此时消息库
 仍按会话隔离（谁说的话存在各自的 ``messages.md`` 里），只有**提炼结果**进同一个文件。
 
 ```json
@@ -33,7 +35,7 @@
 ---------------------------------------------------------
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
-| `global_memory` | `false` | 所有私聊/群聊共用一份记忆库（``<message_path>/_global/memory.md``） |
+| `global_memory` | `false` | 所有私聊/群聊共用一份记忆库（``<data>/_global/memory.md``） |
 | `memory_whitelist` | `[]` | 允许**读且写**记忆的会话（群号 / ``private-<QQ>``，也可只写 QQ）；留空 = 不限制 |
 | `group` | `""` | 群标识；留空用 ``ctx.group``，都为空回退单群兜底 / ``default`` |
 | `default_user` | `默认用户` | 没有发言人时的实体名（建库与检索两侧同口径） |
@@ -48,6 +50,7 @@
 | `recall_growth` | 1.8 | 每次命中稳定度乘数 |
 | `stability_base_hours` / `stability_max_hours` | 24 / 720 | 稳定度基准与上限（小时） |
 | `importance_factor` | 3 | 重要度对初始稳定度的影响系数 |
+| `forget_enable` | `true` | 是否按艾宾浩斯曲线遗忘；`false` = 任何记忆都不会被标记遗忘 |
 | `forget_threshold` | 0.25 | 可提取度低于该值即遗忘（免疫记忆除外） |
 | `immortal_importance` | 0.8 | 重要度达标的记忆永不遗忘 |
 | `immortal_floor` | 0.4 | 免疫记忆参与排序时 ``R`` 的下限 |
@@ -111,7 +114,7 @@ _SELF_LABEL: Final[str] = "我"
 _MAX_EXISTING_LINES: Final[int] = 60
 #: 提炼输入单行截断
 _MAX_LINE_CHARS: Final[int] = 200
-#: 全局记忆的目录名：``<message_path>/_global/memory.md``
+#: 全局记忆的目录名：``<data>/_global/memory.md``（data 根下，不归 groups/private）
 _GLOBAL_MEMORY_DIR: Final[str] = "_global"
 #: 私聊会话标识前缀（与 ``qq_channel`` 的约定一致；这里只用于"白名单只写 QQ"的兼容）
 _PRIVATE_PREFIX: Final[str] = "private-"
@@ -209,11 +212,11 @@ def _group(ctx: Any) -> str:
 
 
 def _discover_group(root: Path) -> str:
-    """未指定群时，若根目录下只有一个群有消息文件，就用它（单群部署的兜底）。"""
+    """未指定群时，若 ``<data>/groups`` 下只有一个群有消息文件，就用它（单群部署的兜底）。"""
     try:
         candidates = sorted(
             path.name
-            for path in root.iterdir()
+            for path in (root / store.GROUPS_DIRNAME).iterdir()
             if path.is_dir() and (path / "messages.md").is_file()
         )
     except OSError:
@@ -222,15 +225,18 @@ def _discover_group(root: Path) -> str:
 
 
 def _paths(ctx: Any) -> tuple[str, Path, Path] | None:
-    """返回 ``(群, 消息库, 记忆库)``；没有注入消息库根目录时返回 ``None``。"""
+    """返回 ``(群, 消息库, 记忆库)``；没有注入 data 根目录时返回 ``None``。"""
     root = getattr(ctx, "message_path", None)
     if root is None:
         return None
     base = Path(root)
     group = _group(ctx) or _discover_group(base) or "default"
-    # 全局记忆：消息库仍按会话隔离，只有记忆库落到同一个 `_global/memory.md`
-    mem_group = _GLOBAL_MEMORY_DIR if _bool_param(ctx, "global_memory", False) else group
-    return group, store.message_file(base, group), mem.memory_file(base, mem_group)
+    mem_path = (
+        base / _GLOBAL_MEMORY_DIR / "memory.md"
+        if _bool_param(ctx, "global_memory", False)  # 消息库仍按会话隔离，只有记忆库共享
+        else mem.memory_file(base, group)
+    )
+    return group, store.message_file(base, group), mem_path
 
 
 def _group_state(ctx: Any, group: str) -> dict[str, Any]:
@@ -276,8 +282,10 @@ def on_start(ctx: Any) -> None:
         scope = "全局共享" if _bool_param(ctx, "global_memory", False) else f"群 {group}"
         limited = _whitelist(ctx)
         note = f"；白名单 {len(limited)} 个会话" if limited else ""
+        forgetting = "遗忘 开" if _bool_param(ctx, "forget_enable", True) else "遗忘 关"
         ctx.log_info(
-            f"就绪: {scope} 记忆库 {mem_path}（可用 {active} / 共 {len(items)} 条{note}）"
+            f"就绪: {scope} 记忆库 {mem_path}"
+            f"（可用 {active} / 共 {len(items)} 条{note}；{forgetting}）"
         )
         _warm_vectors(ctx, mem_path, items)
     except Exception as exc:  # noqa: BLE001 - 启动自检失败不能挡住主流程
@@ -476,10 +484,12 @@ def _tick(ctx: Any) -> None:
     with _LOCK:
         items = mem.load_memory(mem_path)
         if items:
-            marked = mem.decay_scan(items, now, params)
-            if marked:
-                mem.save_memory(mem_path, items)
-                ctx.log_info(f"遗忘 {marked} 条（可提取度低于阈值）")
+            # forget_enable=false：只跳过"标记遗忘"，检索照旧（记录全部保持 active）
+            if _bool_param(ctx, "forget_enable", True):
+                marked = mem.decay_scan(items, now, params)
+                if marked:
+                    mem.save_memory(mem_path, items)
+                    ctx.log_info(f"遗忘 {marked} 条（可提取度低于阈值）")
             _warm_vectors(ctx, mem_path, items)  # 新记忆在后台补向量，别卡回复
 
     _summarize(ctx, group, msg_path, mem_path)

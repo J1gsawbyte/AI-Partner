@@ -1,11 +1,19 @@
-"""消息库读写工具：``<message_path>/<群>/messages.md``（一行一个 JSON）。
+"""消息库读写工具：``<data>/groups/<群号>/messages.md`` 或 ``<data>/private/<QQ>/messages.md``。
 
 只做"会话消息"的存取与隐私打码，**不含任何长期记忆/原子逻辑**。
 长期记忆重构时可以直接复用这一层，替换上面的检索与总结实现。
 
+data 目录布局（``<data>`` 即程序配置 ``message_path``）
+-----------------------------------------------------
+| 会话标识 | 目录 | 文件 |
+| --- | --- | --- |
+| 群号 ``949207129`` | ``groups/949207129/`` | ``messages.md`` / ``memory.md`` |
+| 私聊 ``private-1027713979`` | ``private/1027713979/`` | 同上 |
+
 | 函数 | 用途 |
 | --- | --- |
-| ``message_file`` | 拼出某群的消息文件路径 |
+| ``session_dir`` | 会话标识 → 会话目录（群聊 / 私聊分两层） |
+| ``message_file`` | 拼出某会话的消息文件路径 |
 | ``append_messages`` | 追加消息行（user / assistant / 主动消息） |
 | ``read_messages`` | 读取消息（跳过坏行，支持切片） |
 | ``count_messages`` | 统计有效消息行数 |
@@ -33,6 +41,9 @@ from logger import core_log  # noqa: E402  # pyright: ignore[reportAttributeAcce
 
 __all__ = [
     "BUILTIN_PRIVACY_PATTERNS",
+    "GROUPS_DIRNAME",
+    "PRIVATE_DIRNAME",
+    "PRIVATE_PREFIX",
     "TIME_FMT",
     "append_messages",
     "count_messages",
@@ -41,8 +52,16 @@ __all__ = [
     "message_file",
     "parse_time",
     "read_messages",
+    "session_dir",
     "validate_file_stem",
 ]
+
+#: data 根目录下，群聊与私聊各自的子目录
+GROUPS_DIRNAME = "groups"
+PRIVATE_DIRNAME = "private"
+
+#: 私聊会话标识前缀：群用纯数字群号，私聊用 ``private-<QQ>``
+PRIVATE_PREFIX = "private-"
 
 #: 统一时间格式（与 alpha 一致，便于人工核对）
 TIME_FMT = "%Y-%m-%d %H:%M:%S"
@@ -95,12 +114,25 @@ def parse_time(text: Any) -> datetime | None:
         return None
 
 
-def message_file(root: str | Path, group: str) -> Path:
-    """某个群的消息库文件：``<root>/<group>/messages.md``。
+def session_dir(root: str | Path, session: str) -> Path:
+    """会话标识 → 会话目录。
 
-    ``root`` 是程序配置 ``message_path`` 指向的目录；每个群一个文件，互不干扰。
+    * 群聊（``949207129``）→ ``<root>/groups/949207129/``
+    * 私聊（``private-1027713979``）→ ``<root>/private/1027713979/``
+
+    ``root`` 是程序配置 ``message_path`` 指向的 **data 根目录**；群聊与私聊
+    各占一层，互不串味。
     """
-    return Path(root) / str(group) / "messages.md"
+    name = str(session).strip() or "default"
+    if name.startswith(PRIVATE_PREFIX):
+        qq = name[len(PRIVATE_PREFIX) :].strip() or "unknown"
+        return Path(root) / PRIVATE_DIRNAME / qq
+    return Path(root) / GROUPS_DIRNAME / name
+
+
+def message_file(root: str | Path, session: str) -> Path:
+    """某个会话的消息库文件：``<会话目录>/messages.md``（路径规则见 :func:`session_dir`）。"""
+    return session_dir(root, session) / "messages.md"
 
 
 def mask_privacy(text: str, extra_patterns: Iterable[str] = ()) -> tuple[str, list[str]]:

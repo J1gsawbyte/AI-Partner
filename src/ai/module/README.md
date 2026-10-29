@@ -45,7 +45,7 @@ src/ai/module/
 1. 模块之间禁止 `import`、禁止互相调用，只能通过「数据契约」文件见面；
 2. `brain.py` 里不允许出现业务名词（persona / style / memory / delay / wake）；
 3. `hub` 不解释内容，只做机制与调度；
-4. 模块不自己拼 `configs/` 路径；`data/` 路径用 `ctx.message_path` + `lib` 拼；
+4. 模块不自己拼 `configs/` 路径；`data/` 路径用 `ctx.message_path`（data 根）+ `lib` 的 `message_store.session_dir` / `message_file` 拼；
 5. 一个文件只能有一个写入方；读取方必须能容忍文件缺失（读不到 → 返回空，不抛错）。
 
 验收标准：**所有模块开关全关时，`main.py` 仍能启动、仍能聊天**（只是没有人格、没有记忆、不分句、不延迟）。
@@ -56,7 +56,7 @@ src/ai/module/
 | --- | --- | --- |
 | `configs/modules.json` | **只有开关**：`{"persona": true, "memory": false}` | 没列出来的模块一律不加载（白名单）；键的先后顺序 = 执行顺序 |
 | `configs/modules/<name>.json` | 该模块的**详细配置 + 运行态** | 结构见下，缺文件等价于空配置 |
-| `configs/config.json` | **程序级配置**：`base_url` / `api_key` / `model` / `message_path` | 全局唯一；`message_path` 是消息库**根目录**（默认 `data/groups`），每个群一个 `<根>/<群>/messages.md`；相对路径按项目根解析，不进模块配置 |
+| `configs/config.json` | **程序级配置**：`base_url` / `api_key` / `model` / `message_path` | 全局唯一；`message_path` 是 **data 根目录**（默认 `data`），群聊 `<根>/groups/<群号>/`、私聊 `<根>/private/<QQ>/`；相对路径按项目根解析，不进模块配置 |
 
 ```json
 {
@@ -109,7 +109,7 @@ src/ai/module/
 | `ctx.state` | 该模块的 `state`（dict，可直接改，hub 自动回写） |
 | `ctx.ask(messages, tag="", **options)` | 调用模型（旁路，不进对话主线），走 hub 注入的 `model_caller`（通常是 `post`）；`**options` 透传，如 `response_format={"type": "json_object"}` |
 | `ctx.transcript(n=20)` | 最近 n 条对话消息（由 hub 注入的 provider 提供） |
-| `ctx.message_path` | 消息库根目录（`configs/config.json` 的 `message_path`，由 hub 注入）；用 `message_store.message_file(root, group)` 拼出本群文件 |
+| `ctx.message_path` | data 根目录（`configs/config.json` 的 `message_path`，由 hub 注入）；用 `message_store.message_file(root, 会话)` 拼出本会话文件（群聊 / 私聊自动分层） |
 | `ctx.user_text` / `ctx.reply` / `ctx.now` | 本次触发信息 |
 | `ctx.phase` | `chat`（普通回复）/ `proactive`（主动开口）；由 Brain 告知，**模块据此决定内容** |
 | `ctx.segments` | 本轮待发送的分段（仅 `plan_delays` 钩子有值） |
@@ -128,13 +128,17 @@ src/ai/module/
 
 | 文件 | 唯一写入方 | 读取方 | 写入方缺席时 |
 | --- | --- | --- | --- |
-| `<message_path>/<会话>/messages.md` | `recent_memory` | `recent_memory`、`long_memory` | 读不到 → 返回空片段，不报错 |
-| `<message_path>/<会话>/memory.md` | `long_memory` | `long_memory` | 读不到 → 视为没有任何长期记忆 |
-| `<message_path>/_global/memory.md` | `long_memory` | `long_memory` | `global_memory=true` 时所有会话共用这份 |
+| `<data>/groups/<群号>/messages.md` | `recent_memory` | `recent_memory`、`long_memory` | 读不到 → 返回空片段，不报错 |
+| `<data>/groups/<群号>/memory.md` | `long_memory` | `long_memory` | 读不到 → 视为没有任何长期记忆 |
+| `<data>/private/<QQ>/messages.md` | `recent_memory` | `recent_memory`、`long_memory` | 同上，私聊独立一套 |
+| `<data>/private/<QQ>/memory.md` | `long_memory` | `long_memory` | 同上，私聊独立一套 |
+| `<data>/_global/memory.md` | `long_memory` | `long_memory` | `global_memory=true` 时所有会话共用这份 |
 | `configs/identity.json` | **人**（声明式名单，运行时只读） | `identity`、`qq_channel` | 读不到 → 发言人沿用群名片、没人能私聊、档案不注入 |
 
-`<会话>` 是群号（`949207129`）或私聊标识（`private-1027713979`）：**群聊与私聊各存一套**，
-互不串味。`speaker` 一律写**真名**（由 `qq_channel` 按 QQ 号解析），所以 `messages.md` 与
+`<data>` 是程序配置 `message_path`（默认 `data`）。**群聊与私聊各存一层**：群号（`949207129`）
+落在 `data/groups/949207129/`，私聊标识（`private-1027713979`）落在 `data/private/1027713979/`，
+互不串味。目录由 `message_store.session_dir` 统一决定，模块不要自己拼。
+`speaker` 一律写**真名**（由 `qq_channel` 按 QQ 号解析），所以 `messages.md` 与
 `memory.md` 的 key 前缀不会因为某人改群名片而分裂。
 
 消息格式（一行一个 JSON，只追加不改写）：
@@ -317,7 +321,8 @@ src/ai/module/
   写入，`build` 按内容跳过，避免和 prompt 末尾重复；
 - 不再拼 `[最近对话]` 大段文本：role 本身表达"谁说的、说过几轮"，模型不用从 `- 我：`
   这种文字前缀里去猜；
-- 消息库为 `<ctx.message_path>/<群>/messages.md`；群取 `ctx.group` > `config.group` > `default`；
+- 消息库为 `<ctx.message_path>/groups/<群号>/messages.md`（私聊则是 `/private/<QQ>/`）；
+  群取 `ctx.group` > `config.group` > `default`；
 - 任何异常都返回空串，窗口坏了不影响回复。
 
 ### long_memory（`src/ai/module/modules/long_memory.py`）
@@ -338,7 +343,7 @@ key 一律三段 `{用户名}.{属性}.{次级属性}`：用户名取消息行�
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
-| `global_memory` | `false` | 所有私聊/群聊**共用一份**记忆库：`<message_path>/_global/memory.md` |
+| `global_memory` | `false` | 所有私聊/群聊**共用一份**记忆库：`<data>/_global/memory.md` |
 | `memory_whitelist` | `[]` | 允许**读且写**记忆的会话：群号 / `private-<QQ>`，也可只写 QQ；留空 = 不限制 |
 | `summarize_rounds` | 10 | 未总结轮数达到该值即总结 |
 | `summarize_interval_minutes` | 30 | 距上次总结超过该分钟数且有待总结消息即总结 |
@@ -350,6 +355,7 @@ key 一律三段 `{用户名}.{属性}.{次级属性}`：用户名取消息行�
 | `recall_growth` | 1.8 | 每次命中稳定度乘数（封顶 `stability_max_hours`） |
 | `stability_base_hours` / `stability_max_hours` | 24 / 720 | 稳定度基准 / 上限（小时） |
 | `importance_factor` | 3 | 重要度对初始稳定度的系数 |
+| `forget_enable` | `true` | 是否按遗忘曲线标记 `forgotten`；`false` = 什么都不遗忘（记录全部保持 active） |
 | `forget_threshold` | 0.25 | 可提取度低于该值即遗忘（免疫记忆除外） |
 | `immortal_importance` / `immortal_floor` | 0.8 / 0.4 | 免疫遗忘的重要度门槛 / 排序时 `R` 的下限 |
 | `default_user` | `默认用户` | 没有发言人时的实体名（建库与检索两侧同口径） |
@@ -395,7 +401,11 @@ key 一律三段 `{用户名}.{属性}.{次级属性}`：用户名取消息行�
 
 遗忘口径：`R = exp(-Δt_hours / stability_h)`；命中一次 `recalls +1`、稳定度 `×recall_growth`；
 `R < forget_threshold` 且 `importance < immortal_importance` → `status=forgotten`（记录保留、
-不再检索）。记忆库 `<message_path>/<群>/memory.md` 一行一条 JSON，全量原子重写，不删记录。
+不再检索）。记忆库 `<data>/groups|private/<会话>/memory.md` 一行一条 JSON，全量原子重写，不删记录。
+
+`forget_enable=false` 时这段整体跳过：`decay_scan` 不跑，不会有任何记录变成 `forgotten`，
+也不会写 `forgotten_at`；但 `R` 仍参与 `score × R` 排序，旧记忆只是排得靠后，仍可能被召回。
+启动日志会打印 `遗忘 开 / 遗忘 关`，便于确认配置生效。
 
 ### proactive（`src/ai/module/modules/proactive.py`）
 主动消息的"条件中心"：只决定**什么时候可以开口**，文案生成与发送都交给 `Brain`（保证 persona / 风格 / 记忆一致）。
@@ -463,8 +473,8 @@ Python 侧直接收发，不需要额外的适配进程。
 - **按 QQ 号认人**：`speaker` = 身份库（`identity_path`）里这个 QQ 号的真名；群里没登记就沿用
   群名片，并把 QQ 号记进 `unknown_senders()`。`main_qq.py` 会把未登记的 QQ 号打一行到终端，
   补进 `identity.json` 后下一条消息即生效（不用重启）；
-- **会话标识即记忆目录名**：群是纯数字群号，私聊是 `private-<QQ>`，非法时才退化成
-  `qq-<hash>`。所以**私聊与群聊的记忆天然分开**（`<message_path>/private-<QQ>/`）；
+- **会话标识决定落盘目录**：群是纯数字群号 → `data/groups/<群号>/`，私聊是 `private-<QQ>`
+  → `data/private/<QQ>/`（非法时才退化成 `qq-<hash>`）。所以**私聊与群聊天然分开**；
 - **单实例**：关掉了 `SO_REUSEADDR`（`_Server.allow_reuse_address = False`）。Windows 下
   它允许两个进程同时绑 8786，结果两个 `main_qq.py` 各自建一个日志目录、抢着处理同一份
   上报；现在第二个进程会直接 bind 失败并退出；

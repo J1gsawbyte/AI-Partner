@@ -29,8 +29,8 @@ QQ 登录协议由协议端负责（NapCatQQ、LLOneBot、Lagrange.Core 等）�
   用来临时"闭麦"某个人；只是没登记的人不受影响，群里仍按群名片收。
 
 会话标识（``send_text`` 的目标）用前缀区分：群是纯数字群号，私聊是 ``private-<QQ>``。
-它同时是记忆目录名，所以**私聊与群聊的记忆天然分开**
-（``<message_path>/private-<QQ>/`` 对 ``<message_path>/<群号>/``）。
+``message_store.session_dir`` 按它决定落盘目录，所以**私聊与群聊天然分开**：
+``<data>/private/<QQ>/`` 对 ``<data>/groups/<群号>/``（``<data>`` 是 ``message_path``）。
 
 对外接口（宿主 ``main_qq.py`` 通过 ``hub.get_module("qq_channel")`` 调用）
 --------------------------------------------------------------------------
@@ -124,7 +124,7 @@ _CQ_UNESCAPE: Final[dict[str, str]] = {"&#91;": "[", "&#93;": "]", "&#44;": ",",
 #: 去重表上限
 _DEDUP_MAX: Final[int] = 512
 
-#: 私聊会话标识前缀：群用纯数字群号，私聊用 ``private-<QQ>``，同时是记忆目录名
+#: 私聊会话标识前缀：群用纯数字群号，私聊用 ``private-<QQ>``（决定落盘到 data/private/<QQ>）
 _PRIVATE_PREFIX: Final[str] = "private-"
 
 

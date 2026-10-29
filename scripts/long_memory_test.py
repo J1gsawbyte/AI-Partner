@@ -98,7 +98,7 @@ _BUILD_ROUNDS: Final[int] = 4
 
 
 def _message_file(group: str) -> Path:
-    raw = str(app_config.get("message_path") or "data/groups")
+    raw = str(app_config.get("message_path") or "data")
     root = Path(raw)
     if not root.is_absolute():
         root = ROOT / raw

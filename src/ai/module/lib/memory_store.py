@@ -1,4 +1,4 @@
-"""长期记忆库读写与遗忘曲线工具：``<message_path>/<群>/memory.md``。
+"""长期记忆库读写与遗忘曲线工具：``<data>/groups|private/<会话>/memory.md``。
 
 只做"记忆条目"的纯计算与存取，**不含**任何钩子、配置或运行态；调度归
 ``src/ai/module/modules/long_memory.py``，本文件可脱离 ``ctx`` 单测。
@@ -217,9 +217,9 @@ def find_similar(records: Iterable[dict[str, Any]], key: str) -> dict[str, Any] 
 # -- 存取 ------------------------------------------------------------------ #
 
 
-def memory_file(root: str | Path, group: str) -> Path:
-    """某个群的记忆库文件：``<root>/<群>/memory.md``（与 ``messages.md`` 同目录）。"""
-    return store.message_file(root, group).with_name("memory.md")
+def memory_file(root: str | Path, session: str) -> Path:
+    """某个会话的记忆库文件：``<会话目录>/memory.md``（与 ``messages.md`` 同目录）。"""
+    return store.message_file(root, session).with_name("memory.md")
 
 
 def load_memory(path: Path) -> list[dict[str, Any]]:

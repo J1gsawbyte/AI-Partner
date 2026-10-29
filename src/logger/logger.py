@@ -4,6 +4,8 @@
 
 * 每次程序启动（即本模块被首次 import）时，在项目根目录的 ``logs`` 下创建
   一个以启动时间命名的会话目录 ``logs/YYYY-MM-DD-HH-MM-SS/``；
+* 会话目录保留数量有上限，取 ``configs/config.json`` 的 ``logger_folders_max``
+  （缺失或非法时按 10 处理）；启动时若已达上限，先删除最旧的目录再创建本次的；
 * 本次运行期间创建的所有 logger 对象，都把日志写进这个会话目录；
 * logger 是一个类，可创建多个实例，实例名即文件名（``logger("123")`` -> ``123.log``）；
 * 每次调用写接口都直接打开文件追加、写完立即关闭，不使用缓冲，调用即落盘；
@@ -13,6 +15,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -30,13 +34,81 @@ LOG_ROOT: Final[Path] = Path(__file__).resolve().parents[2] / "logs"
 #: 本次运行的启动时间，用作会话目录名
 STARTUP_TIME: Final[datetime] = datetime.now()
 
+#: 会话目录名格式；固定宽度因此**字典序等于时间序**
+_SESSION_FORMAT: Final[str] = "%Y-%m-%d-%H-%M-%S"
+
+#: 程序配置里控制会话目录数量的字段名
+MAX_FOLDERS_KEY: Final[str] = "logger_folders_max"
+
+#: 未配置或配置非法时保留的会话目录数量
+DEFAULT_MAX_FOLDERS: Final[int] = 10
+
+#: 程序配置文件（与 jsonReader 的 configs/config.json 是同一份）
+_CONFIG_FILE: Final[Path] = Path(__file__).resolve().parents[2] / "configs" / "config.json"
+
+
+def _load_max_folders() -> int:
+    """读取会话目录保留上限，缺失或非法时返回 :data:`DEFAULT_MAX_FOLDERS`。
+
+    这里直接读文件而不复用 ``jsonReader``：``jsonReader`` 反过来 import 本模块，
+    反向依赖会形成循环导入。读取失败一律静默回退，绝不能因为配置问题让程序起不来。
+    """
+    try:
+        data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):  # 文件不存在 / 无权限 / 不是合法 JSON
+        return DEFAULT_MAX_FOLDERS
+
+    value = data.get(MAX_FOLDERS_KEY) if isinstance(data, dict) else None
+    # bool 是 int 的子类，须先排除，避免 true 被当成 1
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return DEFAULT_MAX_FOLDERS
+    return value
+
+
+#: 本次运行允许保留的会话目录数量（含本次新建的；至少 1）
+MAX_FOLDERS: Final[int] = _load_max_folders()
+
+#: 本次启动被清理掉的旧会话目录名，供模块底部补一条日志
+_PRUNED_DIRS: list[str] = []
+
+
+def _is_session_dir(path: Path) -> bool:
+    """只认严格符合时间戳格式的子目录，避免误删用户放进 ``logs`` 的其他内容。"""
+    try:
+        parsed = datetime.strptime(path.name, _SESSION_FORMAT)
+    except ValueError:
+        return False
+    return parsed.strftime(_SESSION_FORMAT) == path.name
+
+
+def _prune_session_dirs(keep: int) -> list[str]:
+    """删除最旧的会话目录，使本次启动后总数不超过 ``keep``；返回被删目录名。"""
+    try:
+        sessions = sorted(
+            p for p in LOG_ROOT.iterdir() if p.is_dir() and _is_session_dir(p)
+        )
+    except OSError:  # logs/ 还不存在（或无权限）：留给后面的 mkdir 处理
+        return []
+
+    # 目录名是固定宽度时间戳，排在最前的就是最旧的
+    surplus = len(sessions) - keep + 1  # +1 是给本次新建的目录留位置
+    removed: list[str] = []
+    for path in sessions[: max(0, surplus)]:
+        try:
+            shutil.rmtree(path)
+        except OSError:  # 被占用或权限不足：跳过，不能让启动失败
+            continue
+        removed.append(path.name)
+    return removed
+
 
 def _create_session_dir() -> Path:
-    """计算并创建本次运行的会话目录，返回其路径。
+    """清理超限的旧会话目录，再创建本次运行的会话目录并返回其路径。
 
     创建失败直接抛出 ``RuntimeError``，避免日志静默丢失。
     """
-    path = LOG_ROOT / STARTUP_TIME.strftime("%Y-%m-%d-%H-%M-%S")
+    path = LOG_ROOT / STARTUP_TIME.strftime(_SESSION_FORMAT)
+    _PRUNED_DIRS.extend(_prune_session_dirs(MAX_FOLDERS))
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:  # pragma: no cover - 仅在目录不可写时触发
@@ -178,3 +250,9 @@ class logger:
 
 core_log: Final[logger] = logger("core")
 transport_log: Final[logger] = logger("transport")
+
+# 启动时若清理过旧会话目录，在新会话的 core.log 里留一条痕迹
+if _PRUNED_DIRS:
+    core_log.warn(
+        f"日志目录数超过上限 {MAX_FOLDERS}, 已删除最旧目录: {', '.join(_PRUNED_DIRS)}"
+    )

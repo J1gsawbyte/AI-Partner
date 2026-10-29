@@ -2,5 +2,6 @@
     "base_url": "https://api.deepseek.com",
     "api_key": "sk-你的API_KEY",
     "model": "deepseek-chat",
-    "message_path": "data/groups"
+    "message_path": "data",
+    "logger_folders_max": 10
 }

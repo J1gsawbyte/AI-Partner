@@ -46,8 +46,9 @@ DEFAULT_MODULES_DIR: Final[Path] = Path(__file__).resolve().parents[1] / "module
 #: 模块详细配置目录：configs/modules
 DEFAULT_CONFIG_DIR: Final[Path] = PROJECT_ROOT / "configs" / "modules"
 
-#: 消息库根目录的默认值（程序配置 ``configs/config.json`` 的 ``message_path``）
-DEFAULT_MESSAGE_PATH: Final[str] = "data/groups"
+#: data 根目录的默认值（程序配置 ``configs/config.json`` 的 ``message_path``）；
+#: 群聊落在 ``<data>/groups/<群号>/``，私聊落在 ``<data>/private/<QQ>/``
+DEFAULT_MESSAGE_PATH: Final[str] = "data"
 
 #: 模块可实现的钩子
 HOOKS: Final[tuple[str, ...]] = (
@@ -81,7 +82,7 @@ def _is_valid_name(name: object) -> bool:
 
 
 def _resolve_message_path(raw: str | Path | None) -> Path:
-    """解析消息库**根目录**：显式入参 > 程序配置 > 默认值；相对路径按项目根解析。"""
+    """解析 **data 根目录**：显式入参 > 程序配置 > 默认值；相对路径按项目根解析。"""
     value = raw if raw is not None else (_app_config.get("message_path") or DEFAULT_MESSAGE_PATH)
     path = Path(str(value))
     return path if path.is_absolute() else PROJECT_ROOT / path
@@ -128,7 +129,7 @@ class ModuleHub:
     ) -> None:
         self.modules_dir = Path(modules_dir) if modules_dir else DEFAULT_MODULES_DIR
         self.config_dir = Path(config_dir) if config_dir else DEFAULT_CONFIG_DIR
-        #: 消息库根目录：各群的消息文件为 ``<message_path>/<群>/messages.md``
+        #: data 根目录：群聊 ``<root>/groups/<群号>/``、私聊 ``<root>/private/<QQ>/``
         #: （程序配置，不进模块配置；模块用 ``message_store.message_file`` 拼）
         self.message_path = _resolve_message_path(message_path)
 

@@ -159,8 +159,8 @@ class Recorder:
 
 
 def _message_file(group: str) -> Path:
-    """本群消息库：``<message_path>/<群>/messages.md``（相对路径按项目根解析）。"""
-    raw = str(app_config.get("message_path") or "data/groups")
+    """本群消息库：``<data>/groups/<群>/messages.md``（相对路径按项目根解析）。"""
+    raw = str(app_config.get("message_path") or "data")
     root = Path(raw)
     if not root.is_absolute():
         root = ROOT / raw
