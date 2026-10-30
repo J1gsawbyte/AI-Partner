@@ -25,9 +25,18 @@ import sys
 import threading
 import unicodedata
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
-import numpy as np
+if TYPE_CHECKING:  # 仅类型检查时导入；运行时缺 numpy 也不能让整个模块 import 失败
+    import numpy as np
+else:
+    try:
+        import numpy as np
+    except ImportError as _exc:  # 新电脑没装 numpy：语义检索降级，长期记忆仍走字面匹配
+        np = None  # type: ignore[assignment]
+        _NUMPY_ERROR = f"缺少依赖 numpy（pip install numpy），原因 {_exc}"
+    else:
+        _NUMPY_ERROR = ""
 
 _LIB_DIR = Path(__file__).resolve().parent
 _SRC_DIR = _LIB_DIR.parents[2]
@@ -63,6 +72,9 @@ def _load(model_path: str | Path, tokenizer_path: str | Path) -> dict[str, Any] 
             return _STATE if _STATE.get("status") == "ok" else None
 
         _STATE.update(key=key, status="failed", session=None, tokenizer=None, inputs=())
+        if np is None:
+            core_log.error(f"语义检索不可用: {_NUMPY_ERROR}，已回退字面匹配")
+            return None
         model, tokenizer = Path(model_path), Path(tokenizer_path)
         if not model.is_file() or not tokenizer.is_file():
             core_log.error(

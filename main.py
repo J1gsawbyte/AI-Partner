@@ -25,17 +25,6 @@ from typing import Any, Final
 _ROOT: Final[Path] = Path(__file__).resolve().parent
 sys.path.insert(0, str(_ROOT / "src" / "ai" / "brain"))
 
-from brain import Brain  # noqa: E402  # pyright: ignore[reportMissingImports]
-
-_HELP: Final[str] = (
-    "/help     查看命令\n"
-    "/as 名字  切换发言人（群聊测试）\n"
-    "/sleep    休眠模式：只记录记忆，不回复也不主动发言\n"
-    "/wake     唤醒模式：只回应 @名字（如 @XXX）的发言（默认）\n"
-    "/reset    清空对话历史与待发送队列（模块状态不受影响）\n"
-    "/exit     退出"
-)
-
 
 def _use_utf8_console() -> None:
     """Windows 控制台默认不是 UTF-8，能改就改，改不了不影响使用。"""
@@ -44,6 +33,50 @@ def _use_utf8_console() -> None:
             stream.reconfigure(encoding="utf-8")  # pyright: ignore[reportAttributeAccessIssue]
         except (AttributeError, OSError, ValueError):
             pass
+
+
+def _startup_failed(exc: Exception) -> None:
+    """启动期异常兜底：打印可读原因 + 写一条 core.log + 等回车。
+
+    新电脑上常见两类问题（没装第三方库、没建 config.json）过去都是裸 traceback：
+    在终端里一闪而过、日志目录还没建，看起来就是"什么都不显示、直接退出"。
+    """
+    _use_utf8_console()
+    print(f"[启动失败] {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+    if isinstance(exc, ImportError):
+        print(
+            "缺少第三方库，请先安装：pip install openai numpy onnxruntime tokenizers",
+            file=sys.stderr,
+            flush=True,
+        )
+    print("完整原因也会写入 logs/<启动时间>/core.log", file=sys.stderr, flush=True)
+    try:  # logger 是项目内模块，没有第三方依赖，能独立写一条
+        sys.path.insert(0, str(_ROOT / "src" / "logger"))
+        from logger import core_log
+
+        core_log.error(f"启动失败, 原因: {type(exc).__name__}: {exc}")
+    except Exception:  # noqa: BLE001 - 兜底提示本身不能再失败
+        pass
+    try:
+        input("按回车键退出...")
+    except (EOFError, KeyboardInterrupt):
+        pass
+
+
+try:
+    from brain import Brain  # noqa: E402  # pyright: ignore[reportMissingImports]
+except Exception as exc:  # noqa: BLE001 - 缺依赖 / 缺配置都走同一条可读提示
+    _startup_failed(exc)
+    raise SystemExit(1)
+
+_HELP: Final[str] = (
+    "/help     查看命令\n"
+    "/as 名字  切换发言人（群聊测试）\n"
+    "/sleep    休眠模式：只记录记忆，不回复也不主动发言\n"
+    "/wake     唤醒模式：只回应 @名字（如 @宋文秀）的发言（默认）\n"
+    "/reset    清空对话历史与待发送队列（模块状态不受影响）\n"
+    "/exit     退出"
+)
 
 
 #: 主动消息的调度间隔（秒）；Brain 内部会与对话互斥
@@ -77,7 +110,7 @@ def _start_tick_thread(brain: Brain) -> threading.Event:
 def _reply(brain: Brain, user_text: str, speaker: str = "", group: str = "") -> None:
     """跑一轮对话，然后把出站队列排空（打印由 ``_send`` 统一负责）。
 
-    只有被唤醒才走回复链路：终端里用 ``@名字`` 模拟群聊 @（``@XXX``），
+    只有被唤醒才走回复链路：终端里用 ``@名字`` 模拟群聊 @（``@宋文秀``），
     由 ``wake`` 模块按 ``configs/modules/wake.json`` 的 ``names`` 判断；
     只写名字、不写 ``@`` 不会唤醒。没唤醒就只记录，到点由后台 ``tick`` 总结。
     """

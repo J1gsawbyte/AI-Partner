@@ -16,7 +16,13 @@ import sys
 from pathlib import Path
 from typing import Any, Final
 
-import openai
+try:
+    import openai
+except ImportError as _exc:  # 新电脑还没装 SDK 时也要能启动，缺库原因留到 post() 再报
+    openai = None  # pyright: ignore[reportConstantRedefinition]
+    _OPENAI_ERROR = f"缺少第三方库 openai，请先安装：pip install openai（{_exc}）"
+else:
+    _OPENAI_ERROR = ""
 
 # 复用本项目的 logger / jsonReader 模块（项目按目录加 sys.path 的方式导入）
 _SRC_DIR: Final[Path] = Path(__file__).resolve().parents[2]
@@ -52,7 +58,7 @@ _ALLOWED_OPTIONS: Final[frozenset[str]] = frozenset(
 )
 
 #: 本次运行唯一可用的客户端；创建失败时保持 None
-_client: openai.OpenAI | None = None
+_client: Any = None
 _client_error: str | None = None
 _model: str | None = None
 
@@ -80,6 +86,8 @@ def _create_client() -> None:
     global _client, _client_error, _model
 
     try:
+        if openai is None:  # 没装 SDK：走统一的"启动不阻断、调用时报错"路径
+            raise RuntimeError(_OPENAI_ERROR)
         base_url, api_key, model = _read_settings()
         _client = openai.OpenAI(base_url=base_url, api_key=api_key)
     except Exception as exc:  # 配置缺失、参数非法、SDK 异常等
