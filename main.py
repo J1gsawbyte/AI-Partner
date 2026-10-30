@@ -31,7 +31,7 @@ _HELP: Final[str] = (
     "/help     查看命令\n"
     "/as 名字  切换发言人（群聊测试）\n"
     "/sleep    休眠模式：只记录记忆，不回复也不主动发言\n"
-    "/wake     唤醒模式：只回应 @名字（如 @宋文秀）的发言（默认）\n"
+    "/wake     唤醒模式：只回应 @名字（如 @XXX）的发言（默认）\n"
     "/reset    清空对话历史与待发送队列（模块状态不受影响）\n"
     "/exit     退出"
 )
@@ -77,7 +77,7 @@ def _start_tick_thread(brain: Brain) -> threading.Event:
 def _reply(brain: Brain, user_text: str, speaker: str = "", group: str = "") -> None:
     """跑一轮对话，然后把出站队列排空（打印由 ``_send`` 统一负责）。
 
-    只有被唤醒才走回复链路：终端里用 ``@名字`` 模拟群聊 @（``@宋文秀``），
+    只有被唤醒才走回复链路：终端里用 ``@名字`` 模拟群聊 @（``@XXX``），
     由 ``wake`` 模块按 ``configs/modules/wake.json`` 的 ``names`` 判断；
     只写名字、不写 ``@`` 不会唤醒。没唤醒就只记录，到点由后台 ``tick`` 总结。
     """

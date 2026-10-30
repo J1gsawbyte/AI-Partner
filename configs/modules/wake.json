@@ -2,9 +2,6 @@
   "config": {
     "require_mention": true,
     "names": [
-      "宋文秀",
-      "秀秀",
-      "学委",
       "Lang2OnHead"
     ],
     "private_always": true
